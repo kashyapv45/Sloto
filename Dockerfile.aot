@@ -13,7 +13,7 @@ COPY src/SaasEngine.Contracts/SaasEngine.Contracts.csproj src/SaasEngine.Contrac
 COPY src/SaasEngine.Api/SaasEngine.Api.csproj src/SaasEngine.Api/
 COPY src/SaasEngine.Admin/SaasEngine.Admin.csproj src/SaasEngine.Admin/
 
-RUN dotnet restore src/SaasEngine.Api/SaasEngine.Api.csproj
+RUN dotnet restore src/SaasEngine.Api/SaasEngine.Api.csproj -r linux-x64
 
 # Copy source code
 COPY src/ src/

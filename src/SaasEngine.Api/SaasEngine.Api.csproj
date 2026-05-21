@@ -8,6 +8,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
     <SuppressAotAnalysisWarnings>true</SuppressAotAnalysisWarnings>
+    <NoWarn>$(NoWarn);IL3000;IL3001;IL3002;IL3003</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />
