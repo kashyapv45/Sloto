@@ -1,0 +1,114 @@
+name: SaaS Engine CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: saasengine_test
+          POSTGRES_USER: test_admin
+          POSTGRES_PASSWORD: TestPassword123!
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Database=saasengine_test;Username=test_admin;Password=TestPassword123!"
+          ConnectionStrings__Redis: "localhost:6379"
+
+  publish-aot:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install AOT prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Publish AOT
+        run: dotnet publish src/SaasEngine.Api/SaasEngine.Api.csproj -c Release -r linux-x64
+
+      - name: Check binary size
+        run: |
+          SIZE=$(stat --printf="%s" src/SaasEngine.Api/bin/Release/net9.0/linux-x64/publish/SaasEngine.Api)
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Binary size: ${SIZE_MB}MB"
+          if [ $SIZE_MB -gt 20 ]; then
+            echo "::error::AOT binary exceeds 20MB target ($SIZE_MB MB)"
+            exit 1
+          fi
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build AOT Docker image
+        run: docker build -f Dockerfile.aot -t saas-engine:aot .
+
+      - name: Build Admin Docker image
+        run: docker build -f Dockerfile.admin -t saas-engine:admin .
+
+      - name: Run Trivy vulnerability scanner (AOT)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'saas-engine:aot'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (Admin)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'saas-engine:admin'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'

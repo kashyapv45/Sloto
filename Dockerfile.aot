@@ -1,0 +1,38 @@
+# ===== Build Stage =====
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Install AOT prerequisites
+RUN apt-get update && apt-get install -y clang zlib1g-dev && rm -rf /var/lib/apt/lists/*
+
+# Copy solution and project files first for layer caching
+COPY global.json ./
+COPY SaasEngine.sln ./
+COPY src/SaasEngine.Domain/SaasEngine.Domain.csproj src/SaasEngine.Domain/
+COPY src/SaasEngine.Contracts/SaasEngine.Contracts.csproj src/SaasEngine.Contracts/
+COPY src/SaasEngine.Api/SaasEngine.Api.csproj src/SaasEngine.Api/
+COPY src/SaasEngine.Admin/SaasEngine.Admin.csproj src/SaasEngine.Admin/
+
+RUN dotnet restore src/SaasEngine.Api/SaasEngine.Api.csproj
+
+# Copy source code
+COPY src/ src/
+
+# Publish AOT binary
+RUN dotnet publish src/SaasEngine.Api/SaasEngine.Api.csproj \
+    -c Release \
+    -r linux-x64 \
+    -o /app/publish \
+    --no-restore
+
+# ===== Runtime Stage =====
+FROM mcr.microsoft.com/dotnet/runtime-deps:9.0-noble-chiseled AS final
+WORKDIR /app
+EXPOSE 8080
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_ENVIRONMENT=Production
+
+ENTRYPOINT ["./SaasEngine.Api"]

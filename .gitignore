@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.cache
+.vs/
+.vscode/
+
+## IDE
+.idea/
+*.sln.DotSettings.user
+
+## Docker
+postgres_data/
+redis_data/
+
+## Test results
+TestResults/
+coverage/
+
+## OS
+.DS_Store
+Thumbbs.db

@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saas-postgres
+    environment:
+      POSTGRES_DB: saasengine
+      POSTGRES_USER: saas_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-DevPassword123!}
+    ports:
+      - "5445:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_admin -d saasengine"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: saas-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-DevRedis123!}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-DevRedis123!}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - saas-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: saas-otel
+    command: ["--config=/etc/otel-collector-config.yml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+      - "8889:8889"
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - saas-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  saas-network:
+    driver: bridge

@@ -8,45 +8,6 @@ This project provides a complete architectural foundation for enterprise softwar
 
 The application is built using a **Modular Monolith** architecture. The codebase is organized into vertical slices by feature, enforcing strict boundaries while deploying as a single process for operational simplicity and maximum performance.
 
-```mermaid
-flowchart TD
-    %% Define Styles
-    classDef client fill:#2D3748,stroke:#4A5568,color:#fff,stroke-width:2px;
-    classDef api fill:#3182CE,stroke:#2B6CB0,color:#fff,stroke-width:2px,font-weight:bold;
-    classDef slice fill:#EDF2F7,stroke:#CBD5E0,color:#2D3748,stroke-width:1px;
-    classDef db fill:#38A169,stroke:#2F855A,color:#fff,stroke-width:2px;
-    classDef cache fill:#DD6B20,stroke:#C05621,color:#fff,stroke-width:2px;
-    classDef bg fill:#805AD5,stroke:#6B46C1,color:#fff,stroke-width:2px;
-    
-    Client((Client API / Web)):::client
-    API[SaasEngine.Api (Native AOT)]:::api
-    
-    subgraph Slices [Vertical Slices]
-        Tenancy[Tenancy]:::slice
-        Identity[Identity & Auth]:::slice
-        Billing[Billing & Plans]:::slice
-        Audit[Audit & GDPR]:::slice
-    end
-    
-    subgraph Infra [Infrastructure]
-        Redis[(Redis)]:::cache
-        PG[(PostgreSQL)]:::db
-        Hangfire[Hangfire Workers]:::bg
-    end
-
-    %% Flow
-    Client -->|HTTP / JWT| API
-    API --> Slices
-    
-    Tenancy -.->|Rate Limiting / Flags| Redis
-    Identity -.->|Data Access (Dapper)| PG
-    Billing -.->|Tenant Connection Resolver| PG
-    Audit -.->|Immutable Events| PG
-    
-    Slices -.->|Enqueues Jobs| Hangfire
-    Hangfire -.->|Background Processing| PG
-```
-
 ### Key Technical Decisions
 - **Data Access:** Fast-path operations use **Dapper** (fully AOT compatible), while admin and migrations use **EF Core**.
 - **Tenancy:** Hybrid routing supporting shared databases for Standard/Pro tiers and physically isolated databases for Enterprise tiers.

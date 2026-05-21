@@ -1,0 +1,46 @@
+groups:
+  - name: saas-engine-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+          route: pagerduty
+        annotations:
+          summary: "High Error Rate (> 5%) for 5 minutes"
+          description: "The global API error rate is above 5%. Check the application logs for unhandled exceptions or DB connectivity issues."
+          runbook_url: "https://github.com/company/NextGen/blob/main/RUNBOOK.md#higherrorrate"
+
+      - alert: JobQueueBackedUp
+        expr: sum(hangfire_job_queue_depth) by (queue) > 1000
+        for: 10m
+        labels:
+          severity: warning
+          route: slack
+        annotations:
+          summary: "Job Queue {{ $labels.queue }} backed up (> 1000 jobs)"
+          description: "The Hangfire job queue '{{ $labels.queue }}' has more than 1000 pending jobs for 10 minutes. Job processing is falling behind."
+          runbook_url: "https://github.com/company/NextGen/blob/main/RUNBOOK.md#jobqueuebackedup"
+
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.99, sum(rate(saas_query_duration_bucket[5m])) by (le)) > 500
+        for: 5m
+        labels:
+          severity: warning
+          route: slack
+        annotations:
+          summary: "Slow Database Queries (p99 > 500ms)"
+          description: "The p99 latency for database queries has exceeded 500ms for the last 5 minutes. This may indicate missing indexes or connection pool exhaustion."
+          runbook_url: "https://github.com/company/NextGen/blob/main/RUNBOOK.md#slowdatabasequeries"
+
+      - alert: AuditLogFailure
+        expr: increase(saas_audit_events_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          route: pagerduty
+        annotations:
+          summary: "Audit Log INSERT Failure"
+          description: "Failed to write one or more events to the immutable audit log store. This is a critical compliance failure."
+          runbook_url: "https://github.com/company/NextGen/blob/main/RUNBOOK.md#auditlogfailure"

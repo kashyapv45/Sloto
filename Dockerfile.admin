@@ -1,0 +1,30 @@
+# ===== Build Stage =====
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY global.json ./
+COPY SaasEngine.sln ./
+COPY src/SaasEngine.Domain/SaasEngine.Domain.csproj src/SaasEngine.Domain/
+COPY src/SaasEngine.Contracts/SaasEngine.Contracts.csproj src/SaasEngine.Contracts/
+COPY src/SaasEngine.Admin/SaasEngine.Admin.csproj src/SaasEngine.Admin/
+
+RUN dotnet restore src/SaasEngine.Admin/SaasEngine.Admin.csproj
+
+COPY src/ src/
+
+RUN dotnet publish src/SaasEngine.Admin/SaasEngine.Admin.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore
+
+# ===== Runtime Stage =====
+FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS final
+WORKDIR /app
+EXPOSE 8080
+
+COPY --from=build /app/publish .
+
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_ENVIRONMENT=Production
+
+ENTRYPOINT ["dotnet", "SaasEngine.Admin.dll"]
