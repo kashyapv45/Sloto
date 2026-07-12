@@ -46,7 +46,7 @@ public sealed class OutboxPollerJob : IJob
         using (var adminConnection = await _adminDb.CreateAsync(cancellationToken).ConfigureAwait(false))
         {
             tenants = await adminConnection.QueryAsync<TenantRecord>(
-                "SELECT id, tier, status FROM tenants WHERE status = 'active'").ConfigureAwait(false);
+                "SELECT id, tier, status FROM tenants").ConfigureAwait(false);
         }
 
         foreach (var tenant in tenants)

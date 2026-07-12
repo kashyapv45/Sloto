@@ -13,7 +13,7 @@ docker-compose up -d
 ## Scenario 1: Redis Failure (Cache & Locks Offline)
 
 **Hypothesis**: If Redis goes down, the API should remain available. Rate limiters will fail open (allow traffic), feature flags will fall back to default database values or `false`, and Hangfire jobs will pause until Redis recovers.
-
+**Known Degradation (Token Blacklist):** The `TokenBlacklistService` falls back to an in-memory, per-process dictionary when Redis is unreachable. In a multi-instance deployment, a "logged out" token will still be accepted by instances that did not process the logout request. This is expected behavior during a Redis outage.
 ### Execution
 1. Tail the API logs:
    ```bash

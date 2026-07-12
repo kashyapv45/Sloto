@@ -23,3 +23,7 @@ coverage/
 ## OS
 .DS_Store
 Thumbbs.db
+
+## Debug Artifacts
+extract*.txt
+*.log

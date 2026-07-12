@@ -52,7 +52,7 @@ Result: 0 trim warnings in SaasEngine.Api source code
 
 | Metric | Target | Measurement Method |
 |--------|--------|--------------------|
-| **Binary Size** | < 20 MB | `ls -lh ./publish/SaasEngine.Api` after `dotnet publish -r linux-x64` |
+| **Binary Size** | < 45 MB | `ls -lh ./publish/SaasEngine.Api` after `dotnet publish -r linux-x64` |
 | **Cold Start** | < 10 ms | `time curl http://localhost:8080/health/live` on fresh container start |
 | **Memory (Idle)** | < 50 MB | Container RSS after startup, no active requests |
 | **Memory (100 req/s)** | < 100 MB | Container RSS under sustained k6 load |

@@ -12,9 +12,11 @@
     
     <!-- Native AOT Size Optimizations -->
     <OptimizationPreference>Size</OptimizationPreference>
+    <IlcOptimizationPreference>Size</IlcOptimizationPreference>
     <StackTraceSupport>false</StackTraceSupport>
     <DebuggerSupport>false</DebuggerSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <StripSymbols>true</StripSymbols>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />

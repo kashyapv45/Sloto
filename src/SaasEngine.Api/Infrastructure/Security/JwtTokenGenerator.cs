@@ -33,8 +33,7 @@ public sealed class JwtTokenGenerator
         }
         else
         {
-            // Generate a fresh transient RSA key for this generator instance (thread-safe, isolated)
-            _rsaPrivateKey = RSA.Create(2048);
+            throw new ArgumentException("A valid RSA private key in PEM format is required.", nameof(privateKeyPem));
         }
 
         _signingKey = new RsaSecurityKey(_rsaPrivateKey) { KeyId = "saasengine-jwt-key" };
@@ -93,12 +92,4 @@ public sealed class JwtTokenGenerator
 
         return tokenHandler.CreateToken(descriptor);
     }
-}
-
-/// <summary>
-/// Static holder for a process-lifetime transient RSA key.
-/// </summary>
-internal static class DevRsaKey
-{
-    public static readonly RSA Instance = RSA.Create(2048);
 }

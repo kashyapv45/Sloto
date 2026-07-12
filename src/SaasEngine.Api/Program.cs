@@ -35,6 +35,17 @@ var builder = WebApplication.CreateBuilder(args);
 // ─── Dapper Type Handlers ──────
 DapperTypeHandlers.Register();
 
+// ─── CORS ────────────────────────────────────────────────────────
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // ─── Observability ───────────────────────────────────────────────
 builder.AddSerilogLogging();
 builder.AddOpenTelemetryObservability();
@@ -66,7 +77,16 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 });
 
 // ─── Secrets ─────────────────────────────────────────────────────
-builder.Services.AddSingleton<ISecretStore, InMemorySecretStore>();
+var secretStore = new InMemorySecretStore();
+if (builder.Environment.IsDevelopment())
+{
+    var devKey = builder.Configuration["Jwt:PrivateKeyPem"];
+    if (!string.IsNullOrEmpty(devKey))
+    {
+        secretStore.SetSecret("Jwt:PrivateKeyPem", devKey);
+    }
+}
+builder.Services.AddSingleton<ISecretStore>(secretStore);
 
 // ─── Database ────────────────────────────────────────────────────
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -142,8 +162,10 @@ builder.Services.AddQuartz(q =>
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 // ─── Authentication ──────────────────────────────────────────────
+var privateKeyPem = secretStore.GetSecretAsync("Jwt:PrivateKeyPem").GetAwaiter().GetResult();
+
 var jwtTokenGenerator = new JwtTokenGenerator(
-    builder.Configuration["Jwt:PrivateKeyPem"]!,
+    privateKeyPem,
     builder.Configuration["Jwt:Issuer"] ?? "SaasEngine",
     builder.Configuration["Jwt:Audience"] ?? "SaasEngine.Api"
 );
@@ -198,6 +220,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantResolutionMiddleware>();

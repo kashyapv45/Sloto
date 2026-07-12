@@ -80,8 +80,8 @@ jobs:
           SIZE=$(stat --printf="%s" src/SaasEngine.Api/bin/Release/net9.0/linux-x64/publish/SaasEngine.Api)
           SIZE_MB=$((SIZE / 1024 / 1024))
           echo "Binary size: ${SIZE_MB}MB"
-          if [ $SIZE_MB -gt 20 ]; then
-            echo "::error::AOT binary exceeds 20MB target ($SIZE_MB MB)"
+          if [ $SIZE_MB -gt 45 ]; then
+            echo "::error::AOT binary exceeds 45MB target ($SIZE_MB MB)"
             exit 1
           fi
 

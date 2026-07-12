@@ -2,7 +2,7 @@
 
 A production-grade, multi-tenant B2B SaaS engine built on **.NET 9**.
 
-This project provides a complete architectural foundation for enterprise software, featuring full Native AOT compatibility, comprehensive OpenTelemetry observability, multi-tier tenant data isolation, and GDPR compliance out-of-the-box.
+This project provides a complete architectural foundation for enterprise software, featuring Native AOT compatibility (see benchmarks for known limitations), comprehensive OpenTelemetry observability, multi-tier tenant data isolation, and GDPR compliance out-of-the-box.
 
 ## 🏗️ Architecture
 
@@ -45,7 +45,7 @@ The API will be available at `http://localhost:8080`.
 - `src/SaasEngine.Domain`: Pure domain entities, value objects, and domain events. Zero dependencies.
 - `src/SaasEngine.Contracts`: Shared DTOs and API response models.
 - `src/SaasEngine.Admin`: Internal back-office API and EF Core migrations (non-AOT).
-- `tests/`: Extensive integration test suite utilizing `Testcontainers` for true PostgreSQL and Redis parity.
+- `tests/`: Comprehensive test suite including Unit, Architecture (NetArchTest), and Integration tests (utilizing `Testcontainers` for true PostgreSQL and Redis parity).
 
 ## 📚 Documentation
 - [Observability Runbook](RUNBOOK.md)
