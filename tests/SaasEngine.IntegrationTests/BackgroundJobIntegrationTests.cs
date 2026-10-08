@@ -67,6 +67,7 @@ public sealed class BackgroundJobIntegrationTests : IClassFixture<WebApplication
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Tenant-Id", tenantId.ToString());
+        client.DefaultRequestHeaders.Add("X-Internal-Key", "SaasEngine_DevAdminKey_2026!");
 
         var registerRequest = new RegisterUserRequest
         {

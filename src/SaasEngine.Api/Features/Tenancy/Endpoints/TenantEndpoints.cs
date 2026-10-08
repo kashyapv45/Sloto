@@ -1,5 +1,7 @@
 using Dapper;
+using FluentValidation;
 using SaasEngine.Api.Infrastructure.Data;
+using SaasEngine.Api.Infrastructure.Security;
 using SaasEngine.Contracts.Tenancy;
 using SaasEngine.Domain.Shared;
 using Microsoft.AspNetCore.Mvc;
@@ -8,7 +10,7 @@ namespace SaasEngine.Api.Features.Tenancy.Endpoints;
 
 /// <summary>
 /// Maps admin tenant lifecycle endpoints.
-/// Protected by X-Internal-Key header middleware.
+/// Protected by AdminEndpointFilter (X-Internal-Key or Admin role).
 /// </summary>
 public static class TenantEndpoints
 {
@@ -16,7 +18,8 @@ public static class TenantEndpoints
     public static void MapTenantEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/admin/tenants")
-            .WithTags("Tenants");
+            .WithTags("Tenants")
+            .AddEndpointFilter<AdminEndpointFilter>();
 
         group.MapPost("/", CreateTenant);
         group.MapGet("/{id:guid}", GetTenant);
@@ -28,9 +31,15 @@ public static class TenantEndpoints
     /// <summary>Provisions a new tenant.</summary>
     private static async Task<IResult> CreateTenant(
         CreateTenantRequest request,
+        [FromServices] IValidator<CreateTenantRequest> validator,
         [FromServices] IAdminConnectionFactory adminDb,
         CancellationToken cancellationToken)
     {
+        var validationResult = await validator.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
         var id = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -108,11 +117,20 @@ public static class TenantEndpoints
         [FromServices] IAdminConnectionFactory adminDb,
         CancellationToken cancellationToken)
     {
+        var statusLower = request.Status?.ToLowerInvariant() ?? string.Empty;
+        if (statusLower != "active" && statusLower != "suspended" && statusLower != "deleted")
+        {
+            return Results.Problem(
+                title: "Invalid Status",
+                detail: "Status must be one of: active, suspended, deleted.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
         using var connection = await adminDb.CreateAsync(cancellationToken).ConfigureAwait(false);
 
         var rows = await connection.ExecuteAsync(
             "UPDATE tenants SET status = @Status, updated_at = @Now WHERE id = @Id",
-            new { Id = id, Status = request.Status.ToLowerInvariant(), Now = DateTimeOffset.UtcNow }).ConfigureAwait(false);
+            new { Id = id, Status = statusLower, Now = DateTimeOffset.UtcNow }).ConfigureAwait(false);
 
         if (rows == 0)
         {

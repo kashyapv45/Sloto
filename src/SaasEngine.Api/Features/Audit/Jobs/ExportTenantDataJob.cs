@@ -71,7 +71,7 @@ public sealed class ExportTenantDataJob : IBackgroundTaskHandler
         using (var connection = await _adminDb.CreateAsync(cancellationToken).ConfigureAwait(false))
         {
             tenant = await connection.QuerySingleOrDefaultAsync<SaasEngine.Domain.Tenancy.Tenant>(
-                "SELECT id, name, tier, plan_id as PlanId, status, connection_secret_ref as ConnectionSecretRef, created_at as CreatedAt, updated_at as UpdatedAt FROM tenants WHERE id = @Id",
+                "SELECT id, name, tier, plan_id as PlanId, status, NULL as ConnectionSecretRef, created_at as CreatedAt, updated_at as UpdatedAt FROM tenants WHERE id = @Id",
                 new { Id = tenantId }).ConfigureAwait(false);
 
             if (tenant is not null)
@@ -111,7 +111,7 @@ public sealed class ExportTenantDataJob : IBackgroundTaskHandler
         using (var connection = await _dbFactory.CreateAsync(cancellationToken).ConfigureAwait(false))
         {
             var userResults = await connection.QueryAsync<SaasEngine.Domain.Identity.User>(
-                "SELECT id, tenant_id as TenantId, email, name, role, password_hash as PasswordHash, mfa_secret as MfaSecret, mfa_enabled as MfaEnabled, status, created_at as CreatedAt FROM users WHERE tenant_id = @TenantId",
+                "SELECT id, tenant_id as TenantId, email, name, role, '' as PasswordHash, NULL as MfaSecret, mfa_enabled as MfaEnabled, status, created_at as CreatedAt FROM users WHERE tenant_id = @TenantId",
                 new { TenantId = tenantId }).ConfigureAwait(false);
             users.AddRange(userResults);
 

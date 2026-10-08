@@ -16,7 +16,9 @@ builder.Host.UseSerilog();
 
 // EF Core
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Host=localhost;Port=5432;Database=saasengine;Username=saas_admin;Password=DevPassword123!";
+    ?? (builder.Environment.IsDevelopment()
+        ? "Host=localhost;Port=5432;Database=saasengine;Username=saas_admin;Password=DevPassword123!"
+        : throw new InvalidOperationException("DefaultConnection connection string is not configured."));
 builder.Services.AddDbContext<AdminDbContext>(opts =>
     opts.UseNpgsql(connectionString));
 

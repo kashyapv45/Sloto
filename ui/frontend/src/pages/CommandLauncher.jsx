@@ -5,23 +5,23 @@ export default function CommandLauncher() {
   const [status, setStatus] = useState(null);
 
   const commands = [
-    { name: 'Run API Server', cmd: 'dotnet run', dir: 'src/SaasEngine.Api', desc: 'Starts the main API engine on port 8080.' },
-    { name: 'Run Admin/Migrations', cmd: 'dotnet run', dir: 'src/SaasEngine.Admin', desc: 'Starts the Admin EF Core tooling and migration runner.' },
-    { name: 'Publish AOT (Windows)', cmd: 'dotnet publish -c Release -r win-x64', dir: 'src/SaasEngine.Api', desc: 'Publishes a Native AOT binary optimized for Windows.' },
-    { name: 'Docker Compose Up', cmd: 'docker compose up', dir: '.', desc: 'Starts the entire SaaS engine docker infrastructure.' }
+    { action: 'run-api', name: 'Run API Server', cmd: 'dotnet run', dir: 'src/SaasEngine.Api', desc: 'Starts the main API engine on port 8080.' },
+    { action: 'run-admin', name: 'Run Admin/Migrations', cmd: 'dotnet run', dir: 'src/SaasEngine.Admin', desc: 'Starts the Admin EF Core tooling and migration runner.' },
+    { action: 'publish-aot', name: 'Publish AOT (Windows)', cmd: 'dotnet publish -c Release -r win-x64', dir: 'src/SaasEngine.Api', desc: 'Publishes a Native AOT binary optimized for Windows.' },
+    { action: 'docker-up', name: 'Docker Compose Up', cmd: 'docker compose up', dir: '.', desc: 'Starts the entire SaaS engine docker infrastructure.' }
   ];
 
-  const launchCommand = async (cmd, dir) => {
-    setStatus({ cmd, state: 'launching' });
+  const launchCommand = async (action) => {
+    setStatus({ cmd: action, state: 'launching' });
     try {
       const response = await fetch('http://localhost:3001/api/run-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd, directory: dir })
+        body: JSON.stringify({ action })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to launch');
-      setStatus({ cmd, state: 'success' });
+      setStatus({ cmd: action, state: 'success' });
       setTimeout(() => setStatus(null), 3000);
     } catch (err) {
       alert(`Error launching command: ${err.message}`);
@@ -46,12 +46,12 @@ export default function CommandLauncher() {
             <button 
               className="btn btn-primary" 
               style={{ width: '100%' }}
-              onClick={() => launchCommand(c.cmd, c.dir)}
-              disabled={status && status.cmd === c.cmd && status.state === 'launching'}
+              onClick={() => launchCommand(c.action)}
+              disabled={status && status.cmd === c.action && status.state === 'launching'}
             >
-              {status && status.cmd === c.cmd && status.state === 'launching' ? (
+              {status && status.cmd === c.action && status.state === 'launching' ? (
                 <><Loader2 className="lucide-spin" size={18} /> Launching CMD...</>
-              ) : status && status.cmd === c.cmd && status.state === 'success' ? (
+              ) : status && status.cmd === c.action && status.state === 'success' ? (
                 <><CheckCircle2 size={18} /> Launched!</>
               ) : (
                 <><Play size={18} /> Execute Command</>

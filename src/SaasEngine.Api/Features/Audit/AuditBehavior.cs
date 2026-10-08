@@ -170,7 +170,7 @@ public sealed class AuditBehavior<TRequest, TResponse> : IPipelineBehavior<TRequ
             {
                 using var connection = await _adminDb.CreateAsync(cancellationToken).ConfigureAwait(false);
                 return await connection.QuerySingleOrDefaultAsync<SaasEngine.Domain.Tenancy.Tenant>(
-                    "SELECT id, name, tier, plan_id as PlanId, status, connection_secret_ref as ConnectionSecretRef, created_at as CreatedAt, updated_at as UpdatedAt FROM tenants WHERE id = @Id",
+                    "SELECT id, name, tier, plan_id as PlanId, status, NULL as ConnectionSecretRef, created_at as CreatedAt, updated_at as UpdatedAt FROM tenants WHERE id = @Id",
                     new { Id = resourceId }).ConfigureAwait(false);
             }
             else if (lowerType == "plan")
@@ -200,7 +200,7 @@ public sealed class AuditBehavior<TRequest, TResponse> : IPipelineBehavior<TRequ
             {
                 using var connection = await _dbFactory.CreateAsync(cancellationToken).ConfigureAwait(false);
                 return await connection.QuerySingleOrDefaultAsync<SaasEngine.Domain.Identity.User>(
-                    "SELECT id, tenant_id as TenantId, email, name, role, password_hash as PasswordHash, mfa_secret as MfaSecret, mfa_enabled as MfaEnabled, status, created_at as CreatedAt FROM users WHERE id = @Id",
+                    "SELECT id, tenant_id as TenantId, email, name, role, '' as PasswordHash, NULL as MfaSecret, mfa_enabled as MfaEnabled, status, created_at as CreatedAt FROM users WHERE id = @Id",
                     new { Id = resourceId }).ConfigureAwait(false);
             }
             else if (lowerType == "feature_flag")

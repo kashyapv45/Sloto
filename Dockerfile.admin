@@ -27,4 +27,6 @@ COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://+:8080
 ENV DOTNET_ENVIRONMENT=Production
 
+USER app
+
 ENTRYPOINT ["dotnet", "SaasEngine.Admin.dll"]

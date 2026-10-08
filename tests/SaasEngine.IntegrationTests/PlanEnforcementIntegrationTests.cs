@@ -326,6 +326,30 @@ public sealed class PlanEnforcementIntegrationTests : IClassFixture<WebApplicati
         Assert.True(flagResponseAfter.Enabled);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    [InlineData(101)]
+    public async Task UpdateFeatureFlag_ReturnsBadRequest_WhenRolloutPercentageOutOfBounds(int invalidPercentage)
+    {
+        // Arrange
+        var tenantId = Guid.NewGuid();
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Internal-Key", "SaasEngine_DevAdminKey_2026!");
+
+        var updateRequest = new UpdateFeatureFlagRequest
+        {
+            Enabled = true,
+            RolloutPercentage = invalidPercentage
+        };
+
+        // Act
+        var response = await client.PutAsJsonAsync($"/admin/tenants/{tenantId}/flags/beta_feature", updateRequest);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
         public TestAuthHandler(

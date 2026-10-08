@@ -28,8 +28,8 @@ public static class AuthEndpoints
         var group = endpoints.MapGroup("/auth");
 
         group.MapPost("/register", Register);
-        group.MapPost("/token", Login);
-        group.MapPost("/mfa/verify", MfaVerify);
+        group.MapPost("/token", Login).RequireRateLimiting("auth-rate-limit");
+        group.MapPost("/mfa/verify", MfaVerify).RequireRateLimiting("auth-rate-limit");
 
         // Protected endpoints (require authentication)
         group.MapPost("/mfa/enroll", MfaEnroll).RequireAuthorization();
@@ -49,6 +49,14 @@ public static class AuthEndpoints
             !Guid.TryParse(tenantIdStr, out var tenantId))
         {
             return TypedResults.Json(new ErrorResponse("X-Tenant-Id header is required."), AppJsonSerializerContext.Default.ErrorResponse, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        // Validate basic input fields
+        if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@') ||
+            string.IsNullOrWhiteSpace(request.Name) ||
+            string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+        {
+            return TypedResults.Json(new ErrorResponse("Invalid registration details. Email, Name, and Password (min 8 characters) are required."), AppJsonSerializerContext.Default.ErrorResponse, statusCode: StatusCodes.Status400BadRequest);
         }
 
         var response = await mediator.Send(new RegisterUserCommand(
@@ -141,6 +149,7 @@ public static class AuthEndpoints
         MfaLoginRequest request,
         [FromServices] IAdminConnectionFactory adminDb,
         [FromServices] JwtTokenGenerator jwtTokenGenerator,
+        [FromServices] TokenBlacklistService blacklistService,
         CancellationToken cancellationToken)
     {
         var tokenHandler = new JsonWebTokenHandler();
@@ -164,6 +173,14 @@ public static class AuthEndpoints
         }
 
         var claims = result.ClaimsIdentity;
+        var jti = claims.FindFirst(JwtRegisteredClaimNames.Jti)?.Value 
+            ?? claims.FindFirst("jti")?.Value;
+
+        if (!string.IsNullOrEmpty(jti) && await blacklistService.IsBlacklistedAsync(jti).ConfigureAwait(false))
+        {
+            return TypedResults.Unauthorized();
+        }
+
         var mfaPending = claims.FindFirst("mfa_pending")?.Value;
         if (mfaPending != "true")
         {
@@ -175,6 +192,12 @@ public static class AuthEndpoints
         if (string.IsNullOrEmpty(sub) || string.IsNullOrEmpty(tid))
         {
             return TypedResults.Json(new ErrorResponse("Invalid challenge token claims."), AppJsonSerializerContext.Default.ErrorResponse, statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (!string.IsNullOrEmpty(jti))
+        {
+            // Immediately blacklist challenge token to ensure single-use
+            await blacklistService.BlacklistTokenAsync(jti, TimeSpan.FromMinutes(5)).ConfigureAwait(false);
         }
 
         using var connection = await adminDb.CreateAsync(cancellationToken).ConfigureAwait(false);

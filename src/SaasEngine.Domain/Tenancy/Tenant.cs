@@ -22,6 +22,7 @@ public sealed record Tenant
     public required TenantStatus Status { get; init; }
 
     /// <summary>Gets the reference to the encrypted connection string secret (Enterprise tier only).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public string? ConnectionSecretRef { get; init; }
 
     /// <summary>Gets the UTC timestamp when this tenant was created.</summary>

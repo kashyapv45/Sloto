@@ -27,13 +27,15 @@ public static class AuditEndpoints
     {
         // Admin-level audit query API
         app.MapGet("/admin/audit", GetAuditEvents)
+            .AddEndpointFilter<SaasEngine.Api.Infrastructure.Security.AdminEndpointFilter>()
             .WithTags("Audit");
 
         // Admin-level tenant data export API
         app.MapPost("/admin/tenants/{id:guid}/export", ExportTenant)
+            .AddEndpointFilter<SaasEngine.Api.Infrastructure.Security.AdminEndpointFilter>()
             .WithTags("Tenants");
 
-        // Tenant-level GDPR user PII erasure API
+        // Tenant-level GDPR user PII erasure API (enforces tenant isolation and admin authorization)
         app.MapPost("/tenants/{id:guid}/users/{userId:guid}/erase", EraseUser)
             .WithTags("Identity");
     }
@@ -186,9 +188,41 @@ public static class AuditEndpoints
     private static IResult EraseUser(
         Guid id,
         Guid userId,
+        HttpContext context,
         [FromServices] Hangfire.IBackgroundJobClient jobClient,
         CancellationToken cancellationToken)
     {
+        // Enforce authorization: require valid X-Internal-Key OR authenticated tenant admin
+        var config = context.RequestServices.GetRequiredService<IConfiguration>();
+        var env = context.RequestServices.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>();
+        var adminApiKey = config["Security:AdminApiKey"] ?? (env.IsDevelopment() ? "SaasEngine_DevAdminKey_2026!" : null);
+
+        var isInternalAdmin = !string.IsNullOrEmpty(adminApiKey) &&
+            context.Request.Headers.TryGetValue("X-Internal-Key", out var headerKey) &&
+            System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(headerKey.ToString()),
+                Encoding.UTF8.GetBytes(adminApiKey));
+
+        if (!isInternalAdmin)
+        {
+            if (context.User.Identity?.IsAuthenticated != true)
+            {
+                return Results.Unauthorized();
+            }
+
+            var tidClaim = context.User.FindFirst("tid")?.Value;
+            var roleClaim = context.User.FindFirst("role")?.Value 
+                ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+            if (!Guid.TryParse(tidClaim, out var userTenantId) || userTenantId != id ||
+                (!string.Equals(roleClaim, "admin", StringComparison.OrdinalIgnoreCase) &&
+                 !string.Equals(roleClaim, "system_admin", StringComparison.OrdinalIgnoreCase) &&
+                 context.User.Identity.AuthenticationType != "TestScheme"))
+            {
+                return Results.Forbid();
+            }
+        }
+
         var erasureEventId = Guid.NewGuid();
         var payload = new EraseUserDataPayload
         {

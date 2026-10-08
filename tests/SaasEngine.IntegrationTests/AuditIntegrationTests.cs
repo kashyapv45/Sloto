@@ -149,6 +149,7 @@ public sealed class AuditIntegrationTests : IClassFixture<WebApplicationFactory<
         }
 
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Internal-Key", "SaasEngine_DevAdminKey_2026!");
 
         // 2. Query Page 1 with pageSize = 2 (should return Action_5, Action_4)
         var response1 = await client.GetAsync($"/admin/audit?tenantId={tenantId}&pageSize=2");

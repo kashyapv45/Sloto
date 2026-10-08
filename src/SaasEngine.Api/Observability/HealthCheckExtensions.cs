@@ -13,24 +13,33 @@ public static class HealthCheckExtensions
     /// <returns>The service collection for chaining.</returns>
     public static IServiceCollection AddHealthCheckServices(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        Microsoft.Extensions.Hosting.IHostEnvironment? environment = null)
     {
         var pgConnectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Database=saasengine;Username=saas_admin;Password=DevPassword123!";
+            ?? (environment is null || environment.IsDevelopment() ? "Host=localhost;Database=saasengine;Username=saas_admin;Password=DevPassword123!" : null);
         var redisConnectionString = configuration.GetConnectionString("Redis")
-            ?? "localhost:6379,password=DevRedis123!";
+            ?? (environment is null || environment.IsDevelopment() ? "localhost:6379,password=DevRedis123!" : null);
 
-        services.AddHealthChecks()
-            .AddNpgSql(
+        var healthChecks = services.AddHealthChecks();
+
+        if (!string.IsNullOrEmpty(pgConnectionString))
+        {
+            healthChecks.AddNpgSql(
                 pgConnectionString,
                 name: "postgresql",
                 failureStatus: HealthStatus.Unhealthy,
-                tags: ["ready"])
-            .AddRedis(
+                tags: ["ready"]);
+        }
+
+        if (!string.IsNullOrEmpty(redisConnectionString))
+        {
+            healthChecks.AddRedis(
                 redisConnectionString,
                 name: "redis",
                 failureStatus: HealthStatus.Unhealthy,
                 tags: ["ready"]);
+        }
 
         return services;
     }

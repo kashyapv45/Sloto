@@ -21,9 +21,11 @@ public sealed record User
     public required string Role { get; init; }
 
     /// <summary>Gets the hashed password.</summary>
-    public required string PasswordHash { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string PasswordHash { get; init; } = string.Empty;
 
     /// <summary>Gets the encrypted TOTP MFA secret, if MFA is enrolled.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public string? MfaSecret { get; init; }
 
     /// <summary>Gets whether MFA is enabled for this user.</summary>

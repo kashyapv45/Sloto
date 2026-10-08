@@ -27,3 +27,9 @@ Thumbbs.db
 ## Debug Artifacts
 extract*.txt
 *.log
+
+## Binaries
+*.exe
+*.dll
+*.so
+*.dylib

@@ -81,6 +81,18 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
             throw new DuplicateEmailException("User with this email already exists in this tenant.");
         }
 
+        // Prevent privilege escalation: only the first user of a tenant can initialize as admin via self-registration
+        var userCount = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM users WHERE tenant_id = @TenantId",
+            new { TenantId = request.TenantId.ToString() },
+            transaction).ConfigureAwait(false);
+
+        var assignedRole = request.Role.ToLowerInvariant();
+        if (userCount > 0 && assignedRole == "admin")
+        {
+            assignedRole = "member";
+        }
+
         var id = Guid.NewGuid();
         var hashedPassword = PasswordHasher.Hash(request.Password);
         var now = DateTimeOffset.UtcNow;
@@ -94,7 +106,7 @@ public sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserCom
                 TenantId = request.TenantId.ToString(),
                 Email = request.Email.ToLowerInvariant(),
                 request.Name,
-                Role = request.Role.ToLowerInvariant(),
+                Role = assignedRole,
                 PasswordHash = hashedPassword,
                 CreatedAt = now
             },

@@ -4,6 +4,8 @@ using Hangfire.InMemory;
 using Hangfire.Redis.StackExchange;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Quartz;
 using Scalar.AspNetCore;
 using SaasEngine.Api.Features.Audit;
@@ -40,9 +42,40 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.AllowAnyOrigin()
+        var configuredOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? ["http://localhost:5173", "http://localhost:3000", "http://localhost:3001"];
+
+        policy.WithOrigins(configuredOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod();
+    });
+});
+
+// ─── Rate Limiting ───────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("auth-rate-limit", opt =>
+    {
+        opt.PermitLimit = 10;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
+
+    options.AddPolicy("engine-rate-limit", httpContext =>
+    {
+        var partitionKey = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetSlidingWindowLimiter(partitionKey, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 100,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6,
+            QueueLimit = 0
+        });
     });
 });
 
@@ -51,7 +84,7 @@ builder.AddSerilogLogging();
 builder.AddOpenTelemetryObservability();
 
 // ─── Health Checks ───────────────────────────────────────────────
-builder.Services.AddHealthCheckServices(builder.Configuration);
+builder.Services.AddHealthCheckServices(builder.Configuration, builder.Environment);
 
 // ─── MediatR (CQRS) ──────────
 builder.Services.AddMediatR(cfg =>
@@ -63,12 +96,16 @@ builder.Services.AddMediatR(cfg =>
 
 // ─── FluentValidation ────────
 builder.Services.AddScoped<IValidator<CreateTenantRequest>, CreateTenantValidator>();
+builder.Services.AddScoped<IValidator<UpdateFeatureFlagRequest>, SaasEngine.Api.Features.Billing.Validators.UpdateFeatureFlagValidator>();
 
 // ─── HttpContext ─────────────────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
 
 // ─── Redis ───────────────────────────────────────────────────────
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379,password=DevRedis123!";
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+    ?? (builder.Environment.IsDevelopment()
+        ? "localhost:6379,password=DevRedis123!"
+        : throw new InvalidOperationException("Redis connection string is not configured."));
 builder.Services.AddSingleton(new RedisConnectionProvider(redisConnectionString));
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
@@ -78,19 +115,24 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 
 // ─── Secrets ─────────────────────────────────────────────────────
 var secretStore = new InMemorySecretStore();
-if (builder.Environment.IsDevelopment())
+var devKey = builder.Configuration["Jwt:PrivateKeyPem"];
+if (!string.IsNullOrWhiteSpace(devKey))
 {
-    var devKey = builder.Configuration["Jwt:PrivateKeyPem"];
-    if (!string.IsNullOrEmpty(devKey))
-    {
-        secretStore.SetSecret("Jwt:PrivateKeyPem", devKey);
-    }
+    secretStore.SetSecret("Jwt:PrivateKeyPem", devKey);
+}
+else
+{
+    // If no key configured in environment/secrets, generate a cryptographically secure ephemeral 2048-bit RSA key
+    using var rsa = System.Security.Cryptography.RSA.Create(2048);
+    secretStore.SetSecret("Jwt:PrivateKeyPem", rsa.ExportRSAPrivateKeyPem());
 }
 builder.Services.AddSingleton<ISecretStore>(secretStore);
 
 // ─── Database ────────────────────────────────────────────────────
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Host=localhost;Port=5432;Database=saasengine;Username=saas_admin;Password=DevPassword123!";
+    ?? (builder.Environment.IsDevelopment()
+        ? "Host=localhost;Port=5432;Database=saasengine;Username=saas_admin;Password=DevPassword123!"
+        : throw new InvalidOperationException("DefaultConnection connection string is not configured."));
 builder.Services.AddSingleton<IAdminConnectionFactory>(new AdminConnectionFactory(defaultConnectionString));
 builder.Services.AddScoped<IDbConnectionFactory, DapperConnectionFactory>();
 
@@ -221,6 +263,7 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantResolutionMiddleware>();
@@ -228,7 +271,10 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 app.MapGet("/", () => Results.Redirect("/scalar/v1"));
 app.MapOpenApi();
 app.MapScalarApiReference();
-app.UseHangfireDashboard("/hangfire");
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = [new SaasEngine.Api.Infrastructure.Security.HangfireDashboardAuthorizationFilter()]
+});
 
 app.MapHealthCheckEndpoints();
 app.MapTenantEndpoints();
@@ -240,7 +286,7 @@ app.MapPost("/jobs/outbox/process", async ([FromServices] OutboxPollerJob poller
 {
     await poller.ProcessOutboxEventsAsync(ct).ConfigureAwait(false);
     return Results.Ok(new MessageResponse("Processed"));
-});
+}).AddEndpointFilter<SaasEngine.Api.Infrastructure.Security.AdminEndpointFilter>();
 
 app.Run();
 

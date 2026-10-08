@@ -20,10 +20,13 @@ public static class BillingEndpoints
         // Client feature check
         app.MapGet("/features/{key}", CheckFeature)
             .RequireAuthorization()
+            .RequireRateLimiting("engine-rate-limit")
             .WithTags("Features");
 
         // Admin feature flag overrides management
         var adminGroup = app.MapGroup("/admin/tenants/{id:guid}/flags")
+            .RequireRateLimiting("engine-rate-limit")
+            .AddEndpointFilter<SaasEngine.Api.Infrastructure.Security.AdminEndpointFilter>()
             .WithTags("Admin Feature Flags");
 
         adminGroup.MapGet("/", GetTenantFlags);
@@ -54,9 +57,16 @@ public static class BillingEndpoints
         Guid id,
         string key,
         UpdateFeatureFlagRequest request,
+        [FromServices] FluentValidation.IValidator<UpdateFeatureFlagRequest> validator,
         [FromServices] IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var validationResult = await validator.ValidateAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!validationResult.IsValid)
+        {
+            return Results.ValidationProblem(validationResult.ToDictionary());
+        }
+
         await mediator.Send(new UpdateTenantFeatureFlagCommand(id, key, request.Enabled, request.RolloutPercentage), cancellationToken).ConfigureAwait(false);
         return TypedResults.NoContent();
     }

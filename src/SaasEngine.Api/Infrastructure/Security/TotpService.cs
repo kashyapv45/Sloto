@@ -55,7 +55,9 @@ public static class TotpService
         {
             var step = currentStep + i;
             var expectedCode = CalculateTotp(secretBytes, step);
-            if (code == expectedCode)
+            if (CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(code),
+                    Encoding.UTF8.GetBytes(expectedCode)))
             {
                 return true;
             }
